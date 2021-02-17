@@ -1,0 +1,244 @@
+﻿@page "/invesment"
+<h3>Invesment</h3>
+
+@using UI.Data
+@using UI.Model
+@using System.Globalization;
+@inject InvesmentService _invesmentService
+@inject IJSRuntime JS
+
+
+
+<EditForm Model="@invesmentInsertModel" OnValidSubmit="@HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+    <div class="row">
+        <div class="col-2 mb-3">
+            <label for="tarih">Tarih:</label>
+            <p>
+                <InputDate id="tarih" @bind-Value="invesmentInsertModel.Date" format-value="yyyy-MM-dd" />
+            </p>
+        </div>
+        <div class="col-2 mb-3">
+            <label for="Kredi">Kur:</label>
+            <p>
+                <InputSelect id="Kur" @bind-Value="invesmentInsertModel.Type">
+                    @foreach (InvesmentType type in (InvesmentType[])Enum.GetValues(typeof(InvesmentType)))
+                    {
+                        <option>@type.ToString()</option>
+                    }
+                </InputSelect>
+            </p>
+        </div>
+        <div class="col-2 mb-3">
+            <label for="Tutar">Fiyat:</label>
+            <InputNumber id="Tutar" @bind-Value="invesmentInsertModel.Amount" />
+        </div>
+        <div class="col-2 mb-3">
+            <label for="Tutar">Adet:</label>
+            <InputNumber id="Adet" @bind-Value="invesmentInsertModel.Quantity" />
+        </div>
+
+        <div class="col-2 mb-3">
+            <button class="btn btn-primary" type="submit">Gönder</button>
+        </div>
+    </div>
+</EditForm>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Id</th>
+            <th>Fiyat</th>
+            <th>Adet</th>
+            <th>Birim</th>
+            <th>Toplam TL</th>
+            <th>Tarih</th>
+            <th>İşlem</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in invesmentList)
+        {
+            <tr>
+                <td>@item.Id</td>
+                <td>@item.Amount</td>
+                <td>@item.Quantity</td>
+                <td>@item.Type</td>
+                <td>@GetTLAmount(item.Amount, item.Quantity)</td>
+                <td>@item.Date</td>
+                <td><button class="btn btn-primary" @onclick="@(e => OnDelete(item))">Sil</button></td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+
+<div class="row align-top">
+    <div class="col-3 mb-3">
+        <label>Toplam Yatırım : @GetTotal()</label>
+    </div>
+    <div class="col-3 mb-3">
+        <label>Toplam Altın Adedi : @invesmentList.Where(x => x.Type == "Altın").Sum(x => x.Quantity).ToString("F2")</label>
+    </div>
+    <div class="col-3 mb-3">
+        <label>Toplam Dolar Adedi : @invesmentList.Where(x => x.Type == "Dolar").Sum(x => x.Quantity).ToString("F2")</label>
+    </div>
+    <div class="col-3 mb-3">
+        <label>Toplam Euro Adedi : @invesmentList.Where(x => x.Type == "Euro").Sum(x => x.Quantity).ToString("F2")</label>
+    </div>
+</div>
+
+<div class="row align-top">
+    <div class="col-3 mb-3">
+        <label style="color:red">Yatırım Anlık Toplam : @GetTotalToDate()</label>
+    </div>
+    <div class="col-3 mb-3">
+        <label style="color:red">Yatırım Altın Kuru Ortalaması: @GetAvarage("Altın")</label>
+    </div>
+    <div class="col-3 mb-3">
+        <label style="color:red">Yatırım Dolar Kuru Ortalaması: @GetAvarage("Dolar")</label>
+    </div>
+    <div class="col-3 mb-3">
+        <label style="color:red">Yatırım Euro Kuru Ortalaması: @GetAvarage("Euro")</label>
+    </div>
+</div>
+
+<div class="row align-top">
+    <div class="col-3 mb-3">
+        <label class="blibli" id="blibli">Güncellenme Tarihi : @mBInvestments.GüncellemeTarihi</label>
+    </div>
+    <div class="col-3 mb-3">
+        <label>Altın Kuru : @mBInvestments.Altin.Alış</label>
+    </div>
+    <div class="col-3 mb-3">
+        <label>Dolar Kuru : @mBInvestments.Dolar.Alış</label>
+    </div>
+    <div class="col-3 mb-3">
+        <label>Euro Kuru : @mBInvestments.Euro.Alış</label>
+    </div>
+</div>
+
+@code {
+    private List<UI.Context.Invesment> invesmentList;
+    private MBInvestment mBInvestments;
+    private System.Threading.Timer timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        invesmentList = _invesmentService.GetInvesmentList();
+        mBInvestments = _invesmentService.GetMBInvestments();
+
+        timer = new System.Threading.Timer(async (object stateInfo) =>
+        {
+            mBInvestments = _invesmentService.GetMBInvestments();
+            await InvokeAsync(() =>
+            {
+                JS.InvokeVoidAsync("blibliupdate");
+                StateHasChanged();
+            });
+        }, new System.Threading.AutoResetEvent(false), 10000, 10000);
+    }
+
+    private async void Refresh()
+    {
+        invesmentList = _invesmentService.GetInvesmentList();
+        this.StateHasChanged();
+    }
+
+    private void OnDelete(UI.Context.Invesment item)
+    {
+        _invesmentService.DeleteInvesment(item);
+        Refresh();
+    }
+
+    private UI.Model.InvesmentInsertModel invesmentInsertModel = new();
+
+    private void HandleValidSubmit()
+    {
+        _invesmentService.InsertInvesment(invesmentInsertModel);
+        Refresh();
+    }
+
+    private string GetTotal()
+    {
+        decimal total = 0;
+        foreach (var item in invesmentList)
+        {
+            var itemTotal = item.Quantity * item.Amount;
+            total += itemTotal;
+        }
+        return total.ToString();
+    }
+    private string GetTotalToDate()
+    {
+
+        decimal dolar = Convert.ToDecimal(mBInvestments.Dolar.Alış);
+        decimal euro = Convert.ToDecimal(mBInvestments.Euro.Alış);
+        decimal altin = Convert.ToDecimal(mBInvestments.Altin.Alış);
+
+        decimal total = 0;
+
+        IEnumerable<Context.Invesment> dolarList = invesmentList.Where(x => x.Type == "Dolar").ToList();
+        IEnumerable<Context.Invesment> euroList = invesmentList.Where(x => x.Type == "Euro").ToList();
+        IEnumerable<Context.Invesment> altinList = invesmentList.Where(x => x.Type == "Altın").ToList();
+
+        decimal totalDolar = 0;
+        foreach (var item in dolarList)
+        {
+            totalDolar += item.Quantity * dolar;
+        }
+
+        decimal totalEuro = 0;
+        foreach (var item in euroList)
+        {
+            totalEuro += item.Quantity * euro;
+        }
+
+        decimal totalAltin = 0;
+        foreach (var item in altinList)
+        {
+            totalAltin += item.Quantity * altin;
+        }
+
+        return (totalDolar + totalAltin + totalEuro).ToString();
+    }
+
+    Func<decimal, decimal, string> GetTLAmount = (x, y) => (x * y).ToString("F2");
+
+    private string GetAvarage(string type)
+    {
+        IEnumerable<Context.Invesment> typeList = invesmentList.Where(x => x.Type == type).ToList();
+
+        decimal totalTL = 0;
+
+        foreach (var item in typeList)
+        {
+            totalTL += item.Quantity * item.Amount;
+        }
+        if (totalTL == 0)
+        {
+            return string.Empty;
+        }
+        return (totalTL / typeList.Sum(x => x.Quantity)).ToString("F2");
+    }
+}
+<style>
+    .blibli {
+        animation: animate 1.0s linear;
+    }
+
+    @@keyframes animate {
+        0% {
+            opacity: 0;
+        }
+
+        50% {
+            opacity: 0.5;
+        }
+
+        100% {
+            opacity: 0.8;
+        }
+    }
+</style>

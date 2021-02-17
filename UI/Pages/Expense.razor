@@ -1,0 +1,157 @@
+﻿@page "/expense"
+
+@using UI.Data
+@inject ExpenseService _expenseService
+
+<h3>Expense</h3>
+
+
+<EditForm Model="@expenseInsertModel" OnValidSubmit="@HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+    <div class="row">
+        <div class="col-2 mb-3">
+            <label for="tarih">Tarih:</label>
+            <p>
+                <InputDate id="Tarih" @bind-Value="expenseInsertModel.Date" format-value="yyyy-MM-dd" />
+            </p>
+        </div>
+        <div class="col-2 mb-3">
+            <label for="Açıklama">Açıklama:</label> 
+            <InputText id="Açıklama" @bind-Value="expenseInsertModel.Description"/>
+        </div>
+        <div class="col-2 mb-3">
+            <label for="Tutar">Tutar:</label>
+            <InputNumber id="Tutar" @bind-Value="expenseInsertModel.Amount" />
+        </div>
+        <div class="col-2 mb-3">
+            <label for="Kredi">Kredi Kartı:</label>
+            <p>
+                <InputCheckbox id="Kredi" @bind-Value="expenseInsertModel.IsCredit" />
+            </p>
+        </div>
+        <div class="col-2 mb-3">
+            <button class="btn btn-primary" type="submit">Gönder</button>
+        </div>
+
+    </div>
+</EditForm>
+
+
+
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Id</th>
+            <th>Açıklama</th>
+            <th>Tutar</th>
+            <th>Kredi Kartı</th>
+            <th>Tarih</th>
+            <th>Ödeme Durumu</th>
+            <th>İşlem</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in expenseList)
+        {
+            Dictionary<string, object> additionalAttributes = new();
+            if (item.IsPaid)
+            {
+                additionalAttributes = new Dictionary<string, object>
+                {
+                    ["checked"] = "checked"
+                };
+            }
+
+        <tr>
+            <td>@item.Id</td>
+            <td>@item.Description</td>
+            <td>@item.Amount</td>
+            <td>@item.IsCredit</td>
+            <td>@item.Date</td>
+            <td> <input type="checkbox" @onchange="@(e => OnPaid(item))" @attributes="additionalAttributes" /></td>
+            <td><button class="btn btn-primary" @onclick="@(e => OnDelete(item))">Sil</button></td>
+        </tr>
+        }
+    </tbody>
+    <button class="btn btn-primary" @onclick="GetByDate">Getir</button>
+</table>
+
+
+<div class="row align-top">
+    <div class="col-4 mb-3">
+        <label>Toplam Nakit Gider : @expenseList.Where(x => !x.IsCredit).Sum(x => x.Amount).ToString()</label>
+    </div>
+    <div class="col-4 mb-3">
+        <label>Toplam K.K Gider : @expenseList.Where(x => x.IsCredit).Sum(x => x.Amount).ToString()</label>
+    </div>
+    <div class="col-4 mb-3">
+        <label>Kalan Ödeme : @expenseList.Where(x => !x.IsPaid).Sum(x => x.Amount).ToString()</label>
+    </div>
+</div>
+
+<div class="row align-top">
+    <div class="col-4 mb-3">
+        <label>Toplam Nakit Kalan : @GetNonCreditRemain()</label>
+    </div>
+    <div class="col-4 mb-3">
+        <label>Toplam K.K Kalan : @GetCreditRemain()</label>
+    </div>
+    <div class="col-4 mb-3">
+        <label></label>
+    </div>
+</div>
+
+@code {
+    private List<UI.Context.Expense> expenseList;
+    private UI.Model.ExpenseInsertModel expenseInsertModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        expenseList = _expenseService.GetExpenseList();
+    }
+
+    private async void Refresh()
+    {
+        expenseList = _expenseService.GetExpenseList();
+        this.StateHasChanged();
+    }
+    private void OnPaid(UI.Context.Expense item)
+    {
+        item.IsPaid = !item.IsPaid;
+        _expenseService.UpdateExpense(item);
+    }
+
+    private void OnDelete(UI.Context.Expense item)
+    {
+        _expenseService.DeleteExpense(item);
+        GetByDate();
+    }
+
+
+
+    private void HandleValidSubmit()
+    {
+        _expenseService.InsertExpense(expenseInsertModel);
+        expenseInsertModel.Description = string.Empty;
+        expenseInsertModel.Amount = 0;
+        expenseInsertModel.IsCredit = false;
+        GetByDate();
+    }
+    [JSInvokable]
+    private void GetByDate()
+    {
+        expenseList = _expenseService.GetExpenseListByDate(expenseInsertModel.Date);
+        this.StateHasChanged();
+    }
+
+    private string GetNonCreditRemain()
+    {
+        return (21000 - expenseList.Where(x => !x.IsCredit).Sum(x => x.Amount)).ToString();
+    }
+    private string GetCreditRemain()
+    {
+        return (1500 - expenseList.Where(x => x.IsCredit).Sum(x => x.Amount)).ToString();
+    }
+}
